@@ -1,0 +1,29 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+pyinstaller = ">=5.0.0"
+pytest = "*"
+black = "*"
+flake8 = "*"
+
+[packages]
+flask = ">=2.0.0"
+psycopg2-binary = ">=2.9.0"
+pandas = ">=1.3.0"
+networkx = ">=2.6.0"
+matplotlib = ">=3.4.0"
+sqlparse = ">=0.4.0"
+waitress = ">=2.0.0"
+flask-session = "*"
+
+[requires]
+python_version = "3.8"
+
+[scripts]
+dev = "python run.py"
+start = "python app_launcher.py"
+build-win = "pyinstaller pyinstaller.spec"
+build-mac = "bash packaging/macos/create_app.sh"

@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>pg_lineagelens - PostgreSQL Data Lineage Visualization</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('index') }}">
+                <i class="bi bi-diagram-3"></i> pg_lineagelens
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="{{ url_for('index') }}">Home</a>
+                    </li>
+                    {% if session.has_results %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('lineage') }}" style="font-weight: bold; color: #fff;">
+                                <i class="bi bi-diagram-3 me-1"></i>Data Lineage
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('expensive_queries') }}">Queries</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('table_stats') }}">Tables</a>
+                        </li>
+                    {% endif %}
+                    {% if session.connection_params %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('disconnect') }}">Disconnect</a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h1 class="h3 mb-0">pg_lineagelens v{{ version }}</h1>
+            </div>
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-12">
+                        <p class="lead text-center mb-4">
+                            Track query performance and understand data flow in your PostgreSQL database. 
+                            pg_lineagelens analyzes your most expensive queries and builds an interactive
+                            data lineage visualization showing how data moves between tables across schemas.
+                        </p>
+                        
+                        {% if session.has_results %}
+                            <div class="text-center mb-3">
+                                <a href="{{ url_for('lineage') }}" class="btn btn-lg btn-primary">
+                                    <i class="bi bi-diagram-3 me-2"></i>View Data Lineage
+                                </a>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header bg-light">
+                <h2 class="h4 mb-0"><i class="bi bi-info-circle me-2"></i>How It Works</h2>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="card mb-3 h-100 border-0 shadow-sm">
+                            <div class="card-body">
+                                <h5 class="card-title"><i class="bi bi-1-circle me-2 text-primary"></i>Connect to PostgreSQL</h5>
+                                <p>Enter your database credentials to connect to your PostgreSQL server.</p>
+                                <p class="small text-muted">Requires the pg_stat_statements extension to be enabled.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card mb-3 h-100 border-0 shadow-sm">
+                            <div class="card-body">
+                                <h5 class="card-title"><i class="bi bi-2-circle me-2 text-primary"></i>Run Analysis</h5>
+                                <p>We'll analyze your most expensive queries and identify table relationships.</p>
+                                <p class="small text-muted">SQL parsing is used to determine source and destination tables.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card mb-3 h-100 border-0 shadow-sm">
+                            <div class="card-body">
+                                <h5 class="card-title"><i class="bi bi-3-circle me-2 text-primary"></i>Explore Lineage</h5>
+                                <p>Visualize data flow, identify bottlenecks, and optimize your queries.</p>
+                                <p class="small text-muted">Export results for documentation or further analysis.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header bg-light">
+                <h2 class="h4 mb-0"><i class="bi bi-database-gear me-2"></i>Database Analysis</h2>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <!-- Left column: Connection details -->
+                    <div class="col-md-6">
+                        <h3 class="h5 mb-3 pb-2 border-bottom"><i class="bi bi-server me-2"></i>Database Connection</h3>
+                        
+                        {% if session.connection_params %}
+                            <div class="p-3 rounded" style="background-color: rgba(46, 204, 113, 0.1); border-left: 4px solid var(--success-color);">
+                                <h5 class="mb-3 text-success"><i class="bi bi-check-circle me-2"></i>Connected to:</h5>
+                                <dl class="row mb-0">
+                                    <dt class="col-sm-3">Host:</dt>
+                                    <dd class="col-sm-9">{{ session.connection_params.host }}:{{ session.connection_params.port }}</dd>
+                                    <dt class="col-sm-3">Database:</dt>
+                                    <dd class="col-sm-9">{{ session.connection_params.database }}</dd>
+                                    <dt class="col-sm-3">User:</dt>
+                                    <dd class="col-sm-9">{{ session.connection_params.user }}</dd>
+                                </dl>
+                                <a href="{{ url_for('disconnect') }}" class="btn btn-sm btn-outline-danger mt-3">
+                                    <i class="bi bi-power me-1"></i>Disconnect
+                                </a>
+                            </div>
+                        {% else %}
+                            <form id="connectionForm">
+                                <div class="row">
+                                    <div class="col-md-8 mb-3">
+                                        <label for="host" class="form-label">Host</label>
+                                        <input type="text" class="form-control" id="host" name="host" value="localhost" required>
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <label for="port" class="form-label">Port</label>
+                                        <input type="number" class="form-control" id="port" name="port" value="5432" required>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="database" class="form-label">Database Name</label>
+                                    <input type="text" class="form-control" id="database" name="database" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="user" class="form-label">Username</label>
+                                    <input type="text" class="form-control" id="user" name="user" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="password" class="form-label">Password</label>
+                                    <input type="password" class="form-control" id="password" name="password" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-plug me-1"></i> Connect
+                                </button>
+                            </form>
+                            <div id="connectionStatus" class="mt-3"></div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Right column: Analysis settings -->
+                    <div class="col-md-6">
+                        <h3 class="h5 mb-3 pb-2 border-bottom"><i class="bi bi-gear-fill me-2"></i>Analysis Settings</h3>
+                        
+                        <form id="analysisForm">
+                            <div class="mb-3">
+                                <label for="limit" class="form-label">Number of queries to analyze</label>
+                                <input type="number" class="form-control" id="limit" name="limit" value="20" min="1" max="100" required>
+                                <div class="form-text">Higher numbers will analyze more queries but take longer</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="min_calls" class="form-label">Minimum query executions</label>
+                                <input type="number" class="form-control" id="min_calls" name="min_calls" value="5" min="1" required>
+                                <div class="form-text">Only analyze queries executed at least this many times</div>
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-lg w-100" {% if not session.connection_params %}disabled{% endif %} id="analyzeBtn">
+                                <i class="bi bi-lightning me-1"></i> Run Analysis
+                            </button>
+                            <div id="analysisStatus" class="mt-3"></div>
+                            <div class="loader" id="loader"></div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% if session.has_results %}
+            <div class="row mt-4" id="resultsSection">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header bg-primary text-white">
+                            <h2 class="h4 mb-0"><i class="bi bi-check-circle me-2"></i>Analysis Results</h2>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-12 mb-4 text-center">
+                                    <div class="featured-card p-4 border rounded shadow-sm" style="background-color: rgba(115, 103, 240, 0.05);">
+                                        <div class="stat-icon" style="font-size: 3rem; color: var(--primary-color);">
+                                            <i class="bi bi-diagram-3"></i>
+                                        </div>
+                                        <h3 class="mb-3">Data Lineage Visualization</h3>
+                                        <p class="mb-4">Explore the interactive visualization of data flow between tables in your PostgreSQL database</p>
+                                        <a href="{{ url_for('lineage') }}" class="btn btn-lg btn-primary">
+                                            <i class="bi bi-diagram-3 me-2"></i>View Data Lineage
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row mt-2">
+                                <div class="col-md-6">
+                                    <div class="stat-card mb-4">
+                                        <div class="stat-icon">
+                                            <i class="bi bi-database-fill-gear"></i>
+                                        </div>
+                                        <div class="stat-value">Queries</div>
+                                        <p class="mb-3">View your most expensive database queries</p>
+                                        <a href="{{ url_for('expensive_queries') }}" class="btn btn-outline-primary">
+                                            <i class="bi bi-search me-1"></i>View Queries
+                                        </a>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="stat-card mb-4">
+                                        <div class="stat-icon">
+                                            <i class="bi bi-table"></i>
+                                        </div>
+                                        <div class="stat-value">Tables</div>
+                                        <p class="mb-3">Analyze usage patterns of your database tables</p>
+                                        <a href="{{ url_for('table_stats') }}" class="btn btn-outline-primary">
+                                            <i class="bi bi-search me-1"></i>View Tables
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-2 text-center">
+                                <a href="{{ url_for('reset') }}" class="btn btn-outline-secondary">
+                                    <i class="bi bi-arrow-repeat me-1"></i> Reset Analysis
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+
+    <footer class="footer mt-5 py-3">
+        <div class="container text-center">
+            <span class="text-muted">pg_lineagelens v{{ version }} - PostgreSQL Data Lineage Visualization Tool</span>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

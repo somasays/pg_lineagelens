@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Table Details - pg_lineagelens</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('index') }}">
+                <i class="bi bi-diagram-3"></i> pg_lineagelens
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('index') }}">
+                            <i class="bi bi-house me-1"></i> Home
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('lineage') }}" style="font-weight: bold;">
+                            <i class="bi bi-diagram-3 me-1"></i> Data Lineage
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('expensive_queries') }}">
+                            <i class="bi bi-lightning me-1"></i> Queries
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="{{ url_for('table_stats') }}">
+                            <i class="bi bi-table me-1"></i> Tables
+                        </a>
+                    </li>
+                    {% if session.connection_params %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('disconnect') }}">
+                            <i class="bi bi-power me-1"></i> Disconnect
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Table Details: {{ table.table_name }}</h1>
+            <a href="{{ url_for('table_stats') }}" class="btn btn-outline-primary">
+                <i class="bi bi-arrow-left"></i> Back to Tables
+            </a>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">Table Statistics</h4>
+            </div>
+            <div class="card-body">
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card">
+                            <div class="card-body text-center">
+                                <h5 class="card-title">Total Queries</h5>
+                                <p class="display-6">{{ table.total_queries }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card">
+                            <div class="card-body text-center">
+                                <h5 class="card-title">Read Queries</h5>
+                                <p class="display-6">{{ table.read_queries }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card">
+                            <div class="card-body text-center">
+                                <h5 class="card-title">Write Queries</h5>
+                                <p class="display-6">{{ table.write_queries }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card">
+                            <div class="card-body text-center">
+                                <h5 class="card-title">Total Time</h5>
+                                <p class="display-6">{{ "%.2f"|format(table.total_time) }} ms</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card mb-3">
+                            <div class="card-header bg-light">
+                                <h5 class="mb-0">Time Distribution</h5>
+                            </div>
+                            <div class="card-body">
+                                <table class="table table-sm">
+                                    <tbody>
+                                        <tr>
+                                            <th>Read operations:</th>
+                                            <td>{{ "%.2f"|format(table.total_read_time) }} ms</td>
+                                            <td>{{ "%.2f"|format((table.total_read_time / table.total_time) * 100) if table.total_time > 0 else 0 }}%</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Write operations:</th>
+                                            <td>{{ "%.2f"|format(table.total_write_time) }} ms</td>
+                                            <td>{{ "%.2f"|format((table.total_write_time / table.total_time) * 100) if table.total_time > 0 else 0 }}%</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Total time:</th>
+                                            <td>{{ "%.2f"|format(table.total_time) }} ms</td>
+                                            <td>100%</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="card mb-3">
+                            <div class="card-header bg-light">
+                                <h5 class="mb-0">Table Information</h5>
+                            </div>
+                            <div class="card-body">
+                                <table class="table table-sm">
+                                    <tbody>
+                                        <tr>
+                                            <th>Table Name:</th>
+                                            <td>{{ table.table_name }}</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Read to Write Ratio:</th>
+                                            <td>
+                                                {% if table.write_queries > 0 %}
+                                                    {{ "%.2f"|format(table.read_queries / table.write_queries) }} : 1
+                                                {% else %}
+                                                    Read-only
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <th>Average Time per Query:</th>
+                                            <td>
+                                                {% if table.total_queries > 0 %}
+                                                    {{ "%.2f"|format(table.total_time / table.total_queries) }} ms
+                                                {% else %}
+                                                    N/A
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% if queries %}
+        <div class="card mb-4">
+            <div class="card-header bg-secondary text-white">
+                <h4 class="mb-0">Related Queries</h4>
+            </div>
+            <div class="card-body">
+                <ul class="nav nav-tabs mb-3" id="queryTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="read-tab" data-bs-toggle="tab" data-bs-target="#read-queries" type="button" role="tab">
+                            Read Queries ({{ queries.read|length }})
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="write-tab" data-bs-toggle="tab" data-bs-target="#write-queries" type="button" role="tab">
+                            Write Queries ({{ queries.write|length }})
+                        </button>
+                    </li>
+                </ul>
+                
+                <div class="tab-content" id="queryTabsContent">
+                    <div class="tab-pane fade show active" id="read-queries" role="tabpanel">
+                        {% if queries.read %}
+                            <div class="list-group">
+                                {% for query in queries.read %}
+                                    <div class="list-group-item">
+                                        <div class="d-flex w-100 justify-content-between">
+                                            <h5 class="mb-1">{{ query.id }}</h5>
+                                        </div>
+                                        <p class="mb-1 query-preview">{{ query.text }}</p>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="alert alert-info">No read queries found for this table.</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="tab-pane fade" id="write-queries" role="tabpanel">
+                        {% if queries.write %}
+                            <div class="list-group">
+                                {% for query in queries.write %}
+                                    <div class="list-group-item">
+                                        <div class="d-flex w-100 justify-content-between">
+                                            <h5 class="mb-1">{{ query.id }}</h5>
+                                        </div>
+                                        <p class="mb-1 query-preview">{{ query.text }}</p>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="alert alert-info">No write queries found for this table.</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="card mb-4">
+            <div class="card-header bg-dark text-white">
+                <h4 class="mb-0">Table Insights</h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h5><i class="bi bi-graph-up"></i> Performance Insights</h5>
+                                <ul>
+                                    {% if table.read_queries > table.write_queries * 5 and table.total_queries > 10 %}
+                                        <li>This table is primarily used for reading ({{ table.read_queries }} reads vs {{ table.write_queries }} writes)</li>
+                                        <li>Consider adding appropriate indexes for frequent query patterns</li>
+                                        <li>If possible, this table could be a good candidate for caching or materialized views</li>
+                                    {% elif table.write_queries > table.read_queries %}
+                                        <li>This table has more write operations than reads ({{ table.write_queries }} writes vs {{ table.read_queries }} reads)</li>
+                                        <li>Consider optimizing write operations and checking for excessive updates</li>
+                                        <li>Be careful with adding too many indexes as they can slow down writes</li>
+                                    {% else %}
+                                        <li>This table has a balanced read/write pattern</li>
+                                        <li>Focus on optimizing the most expensive queries first</li>
+                                    {% endif %}
+                                    
+                                    {% if table.total_time > 1000 and table.total_queries > 5 %}
+                                        <li>This table consumes significant database time ({{ "%.2f"|format(table.total_time) }} ms)</li>
+                                        <li>Consider reviewing schema design and query patterns</li>
+                                    {% endif %}
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h5><i class="bi bi-lightbulb"></i> Recommendations</h5>
+                                <ul>
+                                    <li>Review the data lineage graph to understand how this table connects to others</li>
+                                    <li>Check table statistics with <code>ANALYZE {{ table.table_name }}</code></li>
+                                    <li>Review the table's indexes with <code>\\d {{ table.table_name }}</code> in psql</li>
+                                    <li>Consider partitioning if this is a very large table with distinct access patterns</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer mt-5 py-3 bg-light">
+        <div class="container text-center">
+            <span class="text-muted">PostgreSQL Data Lineage Tool</span>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

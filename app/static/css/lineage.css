@@ -1,0 +1,238 @@
+/* PostgreSQL Data Lineage - Interactive Visualization Styles */
+
+.lineage-container {
+    margin-top: 1.5rem;
+    position: relative;
+}
+
+.lineage-columns {
+    display: flex;
+    gap: 2rem;
+    min-height: 400px;
+}
+
+.tables-column, .queries-column {
+    flex: 1;
+    overflow-y: auto;
+    border-radius: var(--border-radius);
+    background-color: white;
+    box-shadow: var(--card-shadow);
+}
+
+.lineage-header {
+    padding: 1rem;
+    background-color: rgba(0,0,0,0.03);
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.lineage-content {
+    padding: 1rem;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+/* Schema sections */
+.schema-section {
+    margin-bottom: 1rem;
+    overflow: hidden;
+}
+
+.schema-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 0.75rem;
+    background-color: rgba(0,0,0,0.02);
+    border-radius: 0.25rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    border-left: 3px solid var(--primary-color);
+}
+
+.schema-heading:hover {
+    background-color: rgba(0,0,0,0.04);
+}
+
+.schema-heading h5 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.schema-heading .toggle-icon {
+    transition: transform 0.3s;
+}
+
+.schema-heading.collapsed .toggle-icon {
+    transform: rotate(-90deg);
+}
+
+.schema-content {
+    padding: 0.5rem 0;
+    max-height: 1000px;
+    overflow: hidden;
+    transition: max-height 0.5s ease;
+}
+
+/* Table and query items */
+.table-item, .query-item {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.25rem;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    transition: background-color 0.2s, transform 0.2s;
+    text-decoration: none;
+    color: var(--text-color);
+    border-left: 3px solid transparent;
+}
+
+.table-item {
+    border-left-color: rgba(46, 204, 113, 0.5);
+}
+
+.query-item {
+    border-left-color: rgba(52, 152, 219, 0.5);
+}
+
+.table-item:hover, .query-item:hover {
+    background-color: rgba(0,0,0,0.03);
+    transform: translateX(2px);
+}
+
+.table-item.selected, .query-item.selected {
+    background-color: rgba(0,0,0,0.05);
+    transform: translateX(3px);
+    font-weight: 500;
+}
+
+.table-item.highlighted, .query-item.highlighted {
+    background-color: rgba(var(--primary-color-rgb), 0.1);
+}
+
+.table-item.connected, .query-item.connected {
+    background-color: rgba(0,0,0,0.03);
+}
+
+.table-item.source, .query-item.source {
+    border-left-color: #e74c3c;
+}
+
+.table-item.target, .query-item.target {
+    border-left-color: #3498db;
+}
+
+.table-icon, .query-icon {
+    margin-right: 0.75rem;
+    font-size: 1rem;
+    color: var(--text-muted);
+}
+
+.table-item .table-icon {
+    color: rgba(46, 204, 113, 0.8);
+}
+
+.query-item .query-icon {
+    color: rgba(52, 152, 219, 0.8);
+}
+
+.table-name, .query-preview {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.schema-badge {
+    padding: 0.1rem 0.4rem;
+    font-size: 0.7rem;
+    border-radius: 0.25rem;
+    background-color: rgba(0,0,0,0.07);
+    color: var(--text-muted);
+    margin-right: 0.5rem;
+}
+
+.table-stats, .query-stats {
+    display: flex;
+    margin-left: auto;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.stat-item {
+    display: flex;
+    align-items: center;
+    margin-left: 0.75rem;
+}
+
+.stat-icon {
+    margin-right: 0.25rem;
+}
+
+/* Info panel */
+.info-panel {
+    margin-top: 1.5rem;
+    border-radius: var(--border-radius);
+    background-color: white;
+    box-shadow: var(--card-shadow);
+}
+
+.info-panel-header {
+    padding: 1rem;
+    background-color: var(--primary-color);
+    color: white;
+    border-radius: var(--border-radius) var(--border-radius) 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.info-panel-header h4 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.info-panel-content {
+    padding: 1.5rem;
+    min-height: 200px;
+}
+
+/* Connection lines */
+.connection-line {
+    position: absolute;
+    background-color: rgba(0,0,0,0.1);
+    pointer-events: none;
+    z-index: -1;
+    transform-origin: 0 0;
+}
+
+.connection-line.highlighted {
+    background-color: var(--primary-color);
+}
+
+/* Responsive adjustments */
+@media (max-width: 992px) {
+    .lineage-columns {
+        flex-direction: column;
+    }
+    
+    .tables-column, .queries-column {
+        min-height: 300px;
+    }
+}
+
+/* Image fallback */
+.image-fallback {
+    margin-top: 2rem;
+    text-align: center;
+}
+
+.fallback-toggle {
+    margin-bottom: 1rem;
+}
