@@ -10,6 +10,12 @@ on:
     branches: [main]
   workflow_dispatch:  # Allow manual triggering
 
+# Add permissions needed for release creation
+permissions:
+  contents: write
+  packages: write
+  deployments: write
+
 jobs:
   build-macos:
     runs-on: macos-latest
@@ -269,11 +275,14 @@ jobs:
           echo "Files ready for release:"
           ls -la release_files/
         
-      - name: Create Release
+      - name: Create GitHub Release
         id: create_release
-        uses: softprops/action-gh-release@v1
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         with:
-          name: "pg_lineagelens v${{ steps.get_version.outputs.version }}"
+          tag_name: ${{ github.ref }}
+          release_name: "pg_lineagelens v${{ steps.get_version.outputs.version }}"
           body: |
             # pg_lineagelens v${{ steps.get_version.outputs.version }}
             
@@ -286,13 +295,51 @@ jobs:
             
             ## Notes
             See CHANGELOG.md for details on changes in this release.
-          files: |
-            release_files/*
-            macos-app/pg_lineagelens-*.dmg
-            linux-package/pg_lineagelens-*.tar.gz
-            **/pg_lineagelens-*.dmg
-            **/pg_lineagelens-*.tar.gz
           draft: true
           prerelease: false
-          generate_release_notes: true
-          fail_on_unmatched_files: false
+          
+      - name: Find macOS DMG
+        id: find_macos
+        run: |
+          DMG_PATH=$(find . -name "*.dmg" | head -n 1)
+          if [ -n "$DMG_PATH" ]; then
+            echo "Found DMG: $DMG_PATH"
+            echo "dmg_path=$DMG_PATH" >> $GITHUB_OUTPUT
+          else
+            echo "No DMG file found"
+            find . -type f
+          fi
+          
+      - name: Find Linux tarball
+        id: find_linux
+        run: |
+          TARBALL_PATH=$(find . -name "*.tar.gz" | head -n 1)
+          if [ -n "$TARBALL_PATH" ]; then
+            echo "Found tarball: $TARBALL_PATH"
+            echo "tarball_path=$TARBALL_PATH" >> $GITHUB_OUTPUT
+          else
+            echo "No tarball found"
+            find . -type f
+          fi
+          
+      - name: Upload macOS DMG
+        if: steps.find_macos.outputs.dmg_path != ''
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ steps.find_macos.outputs.dmg_path }}
+          asset_name: pg_lineagelens-${{ steps.get_version.outputs.version }}-macos.dmg
+          asset_content_type: application/octet-stream
+          
+      - name: Upload Linux tarball
+        if: steps.find_linux.outputs.tarball_path != ''
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ steps.find_linux.outputs.tarball_path }}
+          asset_name: pg_lineagelens-${{ steps.get_version.outputs.version }}-linux.tar.gz
+          asset_content_type: application/gzip
