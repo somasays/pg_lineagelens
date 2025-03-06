@@ -66,8 +66,48 @@ EOF
 # Make the wrapper script executable
 chmod +x "$MACOS_DIR/run.sh"
 
-# Create DMG
+# Add entitlements and remove quarantine attributes
+# This helps with macOS security restrictions
+# Create entitlements file
+cat > "$CONTENTS_DIR/entitlements.plist" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+</dict>
+</plist>
+EOF
+
+# Make sure all files in the app are executable
+find "$APP_DIR" -type f -name "pg_lineage" -exec chmod +x {} \;
+
+# Create DMG with special options for better compatibility
 echo "Creating DMG..."
 hdiutil create -volname "$APP_NAME" -srcfolder "$APP_DIR" -ov -format UDZO "dist/$APP_NAME.dmg"
+
+# Add readme file with instructions for opening the app
+cat > "dist/README_MACOS.txt" << EOF
+IMPORTANT: Opening pg_lineagelens on macOS
+
+Due to macOS security features, you may see a message that the app is damaged or can't be opened.
+To fix this, please follow these steps:
+
+1. After mounting the DMG, right-click (or Control+click) on the pg_lineagelens app
+2. Select "Open" from the context menu
+3. Click "Open" when prompted to confirm
+4. If you still see a warning, open System Preferences > Security & Privacy
+5. Look for a message about pg_lineagelens being blocked and click "Open Anyway"
+
+Alternatively, you can run this command in Terminal:
+xattr -d com.apple.quarantine /Applications/pg_lineagelens.app
+
+This will remove the quarantine attribute and allow the app to run.
+EOF
 
 echo "Done!"

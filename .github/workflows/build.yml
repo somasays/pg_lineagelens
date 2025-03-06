@@ -90,6 +90,7 @@ jobs:
           path: |
             dist/pg_lineagelens-*.dmg
             dist/*.dmg
+            dist/README_MACOS.txt
           if-no-files-found: error
           retention-days: 7
   
@@ -298,16 +299,25 @@ jobs:
           draft: true
           prerelease: false
           
-      - name: Find macOS DMG
+      - name: Find macOS DMG and README
         id: find_macos
         run: |
           DMG_PATH=$(find . -name "*.dmg" | head -n 1)
+          README_PATH=$(find . -name "README_MACOS.txt" | head -n 1)
+          
           if [ -n "$DMG_PATH" ]; then
             echo "Found DMG: $DMG_PATH"
             echo "dmg_path=$DMG_PATH" >> "$GITHUB_OUTPUT"
           else
             echo "No DMG file found"
             find . -type f
+          fi
+          
+          if [ -n "$README_PATH" ]; then
+            echo "Found README: $README_PATH"
+            echo "readme_path=$README_PATH" >> "$GITHUB_OUTPUT"
+          else
+            echo "No README file found"
           fi
           
       - name: Find Linux tarball
@@ -332,6 +342,17 @@ jobs:
           asset_path: ${{ steps.find_macos.outputs.dmg_path }}
           asset_name: pg_lineagelens-${{ steps.get_version.outputs.version }}-macos.dmg
           asset_content_type: application/octet-stream
+          
+      - name: Upload macOS README
+        if: steps.find_macos.outputs.readme_path != ''
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ steps.find_macos.outputs.readme_path }}
+          asset_name: README_MACOS.txt
+          asset_content_type: text/plain
           
       - name: Upload Linux tarball
         if: steps.find_linux.outputs.tarball_path != ''
