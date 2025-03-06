@@ -32,11 +32,13 @@ jobs:
           echo "Creating placeholder icon file"
           # Generate a simple colored square as a placeholder icon
           # First, create a temporary PNG
-          echo "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
-          <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1024\" height=\"1024\">
-            <rect width=\"1024\" height=\"1024\" fill=\"#336699\"/>
-            <text x=\"512\" y=\"512\" font-family=\"Arial\" font-size=\"220\" text-anchor=\"middle\" fill=\"white\">PL</text>
-          </svg>" > icon_temp.svg
+          cat > icon_temp.svg << 'EOL'
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024">
+  <rect width="1024" height="1024" fill="#336699"/>
+  <text x="512" y="512" font-family="Arial" font-size="220" text-anchor="middle" fill="white">PL</text>
+</svg>
+EOL
           
           # If sips is available, we'll use it to convert, otherwise just create an empty icon
           if command -v sips &> /dev/null; then
@@ -108,11 +110,13 @@ jobs:
         run: |
           mkdir -p packaging/linux
           # Create a simple colored square as a placeholder icon
-          echo "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
-          <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"256\" height=\"256\">
-            <rect width=\"256\" height=\"256\" fill=\"#336699\"/>
-            <text x=\"128\" y=\"128\" font-family=\"Arial\" font-size=\"72\" text-anchor=\"middle\" fill=\"white\">PL</text>
-          </svg>" > packaging/linux/pg_lineage.svg
+          cat > packaging/linux/pg_lineage.svg << 'EOL'
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256">
+  <rect width="256" height="256" fill="#336699"/>
+  <text x="128" y="128" font-family="Arial" font-size="72" text-anchor="middle" fill="white">PL</text>
+</svg>
+EOL
           
           # Convert SVG to PNG if imagemagick is available
           if command -v convert &> /dev/null; then
@@ -165,13 +169,13 @@ jobs:
           echo "Creating placeholder icon and installer images"
           
           # Create SVG for icon
-          $svgContent = @"
+          $svgContent = @'
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256">
   <rect width="256" height="256" fill="#336699"/>
   <text x="128" y="128" font-family="Arial" font-size="72" text-anchor="middle" fill="white">PL</text>
 </svg>
-"@
+'@
           $svgContent | Out-File -FilePath "packaging/windows/pg_lineage.svg" -Encoding utf8
           
           # Create a blank .ico file (we'll use a real image converter if available)
