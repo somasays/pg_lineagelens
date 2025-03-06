@@ -1,5 +1,11 @@
 # PostgreSQL Data Lineage Analyzer
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![GitHub release](https://img.shields.io/github/v/release/somasays/pg_lineagelens)](https://github.com/somasays/pg_lineagelens/releases)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/somasays/pg_lineagelens/build.yml?branch=main)](https://github.com/somasays/pg_lineagelens/actions)
+[![PyPI version](https://img.shields.io/pypi/v/pg-lineage)](https://pypi.org/project/pg-lineage/)
+
 A tool for analyzing query performance and building data lineage graphs from PostgreSQL databases.
 
 ## Features
