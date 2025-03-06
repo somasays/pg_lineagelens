@@ -27,23 +27,43 @@ jobs:
       
       - name: Create icon file
         run: |
-          mkdir -p packaging/macos/icon.iconset
-          # Create a simple icon or use an existing one, if available
-          if [ -f app/static/img/logo.png ]; then
-            cp app/static/img/logo.png packaging/macos/pg_lineage.png
+          mkdir -p packaging/macos
+          # Create a simple placeholder icon (since app/static/img/logo.png is empty or invalid)
+          echo "Creating placeholder icon file"
+          # Generate a simple colored square as a placeholder icon
+          # First, create a temporary PNG
+          echo "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+          <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1024\" height=\"1024\">
+            <rect width=\"1024\" height=\"1024\" fill=\"#336699\"/>
+            <text x=\"512\" y=\"512\" font-family=\"Arial\" font-size=\"220\" text-anchor=\"middle\" fill=\"white\">PL</text>
+          </svg>" > icon_temp.svg
+          
+          # If sips is available, we'll use it to convert, otherwise just create an empty icon
+          if command -v sips &> /dev/null; then
+            # Use sips to convert SVG to PNG
+            sips -s format png icon_temp.svg --out packaging/macos/pg_lineage.png || touch packaging/macos/pg_lineage.png
             mkdir -p packaging/macos/icon.iconset
-            # Convert to different icon sizes
-            for size in 16 32 64 128 256 512; do
-              sips -z $size $size packaging/macos/pg_lineage.png --out packaging/macos/icon.iconset/icon_${size}x${size}.png
-              if [ $size -le 256 ]; then
-                sips -z $(($size*2)) $(($size*2)) packaging/macos/pg_lineage.png --out packaging/macos/icon.iconset/icon_${size}x${size}@2x.png
-              fi
-            done
-            iconutil -c icns packaging/macos/icon.iconset -o packaging/macos/pg_lineage.icns
+            # Only proceed with iconset creation if we have a valid PNG
+            if [ -s packaging/macos/pg_lineage.png ]; then
+              echo "Creating iconset..."
+              # Convert to different icon sizes
+              for size in 16 32 64 128 256 512; do
+                sips -z $size $size packaging/macos/pg_lineage.png --out packaging/macos/icon.iconset/icon_${size}x${size}.png
+                if [ $size -le 256 ]; then
+                  sips -z $(($size*2)) $(($size*2)) packaging/macos/pg_lineage.png --out packaging/macos/icon.iconset/icon_${size}x${size}@2x.png
+                fi
+              done
+              # Try to create the icns file, but don't fail if it doesn't work
+              iconutil -c icns packaging/macos/icon.iconset -o packaging/macos/pg_lineage.icns || touch packaging/macos/pg_lineage.icns
+            else
+              touch packaging/macos/pg_lineage.icns
+            fi
           else
-            # Create a blank icon file
+            # If sips isn't available, just create an empty icon file
             touch packaging/macos/pg_lineage.icns
           fi
+          # Ensure the icon file exists regardless of the above operations
+          touch packaging/macos/pg_lineage.icns
       
       - name: Install dependencies
         run: |
@@ -53,6 +73,13 @@ jobs:
       - name: Build macOS app
         run: |
           pipenv run pyinstaller pyinstaller.spec
+          # Make sure we have a valid icon before running the create_app.sh script
+          if [ ! -s packaging/macos/pg_lineage.icns ]; then
+            echo "No valid icon file found, creating a simple placeholder"
+            touch packaging/macos/pg_lineage.icns
+          fi
+          # Modify PyInstaller spec file to not fail on missing icon
+          sed -i.bak 's/icon=.*icns/icon=None/g' pyinstaller.spec || true
           bash packaging/macos/create_app.sh
       
       - name: Upload macOS artifacts
@@ -80,11 +107,19 @@ jobs:
       - name: Create icon file
         run: |
           mkdir -p packaging/linux
-          # Create a simple icon
-          if [ -f app/static/img/logo.png ]; then
-            cp app/static/img/logo.png packaging/linux/pg_lineage.png
+          # Create a simple colored square as a placeholder icon
+          echo "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+          <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"256\" height=\"256\">
+            <rect width=\"256\" height=\"256\" fill=\"#336699\"/>
+            <text x=\"128\" y=\"128\" font-family=\"Arial\" font-size=\"72\" text-anchor=\"middle\" fill=\"white\">PL</text>
+          </svg>" > packaging/linux/pg_lineage.svg
+          
+          # Convert SVG to PNG if imagemagick is available
+          if command -v convert &> /dev/null; then
+            convert packaging/linux/pg_lineage.svg packaging/linux/pg_lineage.png
           else
-            # Create a blank icon file
+            # Fallback to creating an empty file
+            echo "ImageMagick not available, creating empty PNG file"
             touch packaging/linux/pg_lineage.png
           fi
       
@@ -126,18 +161,33 @@ jobs:
       - name: Create icon files
         run: |
           mkdir -p packaging/windows
-          # Create/copy icons and installer images
-          if (Test-Path "app/static/img/logo.png") {
-            Copy-Item "app/static/img/logo.png" -Destination "packaging/windows/logo.png"
-            # Create .ico file (requires ImageMagick on Windows, using placeholder for now)
-            echo "Creating placeholder icon"
-            New-Item -ItemType File -Path "packaging/windows/pg_lineage.ico" -Force
-          } else {
-            New-Item -ItemType File -Path "packaging/windows/pg_lineage.ico" -Force
-          }
-          # Create installer images
+          # Always create a placeholder icon and images
+          echo "Creating placeholder icon and installer images"
+          
+          # Create SVG for icon
+          $svgContent = @"
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256">
+  <rect width="256" height="256" fill="#336699"/>
+  <text x="128" y="128" font-family="Arial" font-size="72" text-anchor="middle" fill="white">PL</text>
+</svg>
+"@
+          $svgContent | Out-File -FilePath "packaging/windows/pg_lineage.svg" -Encoding utf8
+          
+          # Create a blank .ico file (we'll use a real image converter if available)
+          New-Item -ItemType File -Path "packaging/windows/pg_lineage.ico" -Force
+          
+          # Create installer images (blank for now)
           New-Item -ItemType File -Path "packaging/windows/installer-sidebar.bmp" -Force
           New-Item -ItemType File -Path "packaging/windows/installer-header.bmp" -Force
+          
+          # Try to find ImageMagick to convert the SVG to ICO
+          if (Get-Command "magick" -ErrorAction SilentlyContinue) {
+            Write-Host "ImageMagick found, converting SVG to ICO"
+            & magick convert "packaging/windows/pg_lineage.svg" "packaging/windows/pg_lineage.ico"
+          } else {
+            Write-Host "ImageMagick not found, using placeholder icon"
+          }
         shell: pwsh
       
       - name: Install NSIS
