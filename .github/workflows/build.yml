@@ -1,14 +1,15 @@
 name: Build pg_lineagelens
 
 on:
+  # Run on tags directly (if not going through test workflow)
   push:
-    # Only run on version tags and main branch
-    branches: [main]
     tags:
       - 'v*'
-  pull_request:
-    branches: [main]
-  workflow_dispatch:  # Allow manual triggering
+  # Run when manually triggered
+  workflow_dispatch:
+  # Run when triggered by the test workflow
+  repository_dispatch:
+    types: [tests-passed]
 
 # Add permissions needed for release creation
 permissions:
@@ -21,6 +22,9 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # For repository_dispatch events, we need to specify the ref
+          ref: ${{ github.event.client_payload.tag || github.ref }}
       
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -30,8 +34,12 @@ jobs:
       - name: Get version
         id: get_version
         run: |
+          # If this is a repository_dispatch event, use the tag from client payload
+          if [[ "${{ github.event_name }}" == "repository_dispatch" ]]; then
+            TAG="${{ github.event.client_payload.tag }}"
+            VERSION=${TAG#v}
           # If this is a tag, use the tag name without the 'v' prefix
-          if [[ $GITHUB_REF == refs/tags/v* ]]; then
+          elif [[ $GITHUB_REF == refs/tags/v* ]]; then
             VERSION=${GITHUB_REF#refs/tags/v}
           else
             # Otherwise use the version from _version.py with SNAPSHOT suffix
@@ -98,6 +106,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # For repository_dispatch events, we need to specify the ref
+          ref: ${{ github.event.client_payload.tag || github.ref }}
       
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -107,8 +118,12 @@ jobs:
       - name: Get version
         id: get_version
         run: |
+          # If this is a repository_dispatch event, use the tag from client payload
+          if [[ "${{ github.event_name }}" == "repository_dispatch" ]]; then
+            TAG="${{ github.event.client_payload.tag }}"
+            VERSION=${TAG#v}
           # If this is a tag, use the tag name without the 'v' prefix
-          if [[ $GITHUB_REF == refs/tags/v* ]]; then
+          elif [[ $GITHUB_REF == refs/tags/v* ]]; then
             VERSION=${GITHUB_REF#refs/tags/v}
           else
             # Otherwise use the version from _version.py with SNAPSHOT suffix
@@ -239,9 +254,12 @@ jobs:
   create-release:
     needs: [build-macos, build-linux]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'repository_dispatch'
     steps:
       - uses: actions/checkout@v4
+        with:
+          # For repository_dispatch events, we need to specify the ref
+          ref: ${{ github.event.client_payload.tag || github.ref }}
       
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -262,8 +280,14 @@ jobs:
       - name: Get version
         id: get_version
         run: |
-          # Extract version from tag
-          VERSION=${GITHUB_REF#refs/tags/v}
+          # If this is a repository_dispatch event, use the tag from client payload
+          if [[ "${{ github.event_name }}" == "repository_dispatch" ]]; then
+            TAG="${{ github.event.client_payload.tag }}"
+            VERSION=${TAG#v}
+          else
+            # Extract version from tag
+            VERSION=${GITHUB_REF#refs/tags/v}
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Creating release for version: $VERSION"
           
@@ -282,7 +306,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
-          tag_name: ${{ github.ref }}
+          tag_name: ${{ github.event.client_payload.tag || github.ref }}
           release_name: "pg_lineagelens v${{ steps.get_version.outputs.version }}"
           body: |
             # pg_lineagelens v${{ steps.get_version.outputs.version }}

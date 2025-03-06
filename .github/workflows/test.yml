@@ -1,14 +1,18 @@
-name: Run Tests
+name: Test and Build
 
 on:
   push:
     branches: [main]
+    tags:
+      - 'v*'
   pull_request:
     branches: [main]
   workflow_dispatch:  # Allow manual triggering
 
 permissions:
   contents: read
+  # Required for triggering other workflows
+  actions: write
 
 jobs:
   test:
@@ -54,3 +58,11 @@ jobs:
       with:
         file: ./coverage.xml
         fail_ci_if_error: false
+        
+    - name: Trigger build workflow on tag
+      if: success() && startsWith(github.ref, 'refs/tags/v')
+      uses: peter-evans/repository-dispatch@v2
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        event-type: tests-passed
+        client-payload: '{"tag": "${{ github.ref_name }}"}'
