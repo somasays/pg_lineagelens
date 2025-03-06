@@ -1,0 +1,194 @@
+name: Build PostgreSQL Data Lineage
+
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.8'
+      
+      - name: Install pipenv
+        run: |
+          python -m pip install --upgrade pip
+          pip install pipenv
+      
+      - name: Create icon file
+        run: |
+          mkdir -p packaging/macos/icon.iconset
+          # Create a simple icon or use an existing one, if available
+          if [ -f app/static/img/logo.png ]; then
+            cp app/static/img/logo.png packaging/macos/pg_lineage.png
+            mkdir -p packaging/macos/icon.iconset
+            # Convert to different icon sizes
+            for size in 16 32 64 128 256 512; do
+              sips -z $size $size packaging/macos/pg_lineage.png --out packaging/macos/icon.iconset/icon_${size}x${size}.png
+              if [ $size -le 256 ]; then
+                sips -z $(($size*2)) $(($size*2)) packaging/macos/pg_lineage.png --out packaging/macos/icon.iconset/icon_${size}x${size}@2x.png
+              fi
+            done
+            iconutil -c icns packaging/macos/icon.iconset -o packaging/macos/pg_lineage.icns
+          else
+            # Create a blank icon file
+            touch packaging/macos/pg_lineage.icns
+          fi
+      
+      - name: Install dependencies
+        run: |
+          pipenv install
+          pipenv install --dev
+      
+      - name: Build macOS app
+        run: |
+          pipenv run pyinstaller pyinstaller.spec
+          bash packaging/macos/create_app.sh
+      
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: macos-app
+          path: dist/PostgreSQL*.dmg
+          if-no-files-found: error
+  
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.8'
+      
+      - name: Install pipenv
+        run: |
+          python -m pip install --upgrade pip
+          pip install pipenv
+      
+      - name: Create icon file
+        run: |
+          mkdir -p packaging/linux
+          # Create a simple icon
+          if [ -f app/static/img/logo.png ]; then
+            cp app/static/img/logo.png packaging/linux/pg_lineage.png
+          else
+            # Create a blank icon file
+            touch packaging/linux/pg_lineage.png
+          fi
+      
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpq-dev
+          pipenv install
+          pipenv install --dev
+      
+      - name: Build Linux package
+        run: |
+          pipenv run pyinstaller pyinstaller.spec
+          chmod +x packaging/linux/create_package.sh
+          packaging/linux/create_package.sh
+      
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: linux-package
+          path: dist/PostgreSQL*.tar.gz
+          if-no-files-found: error
+  
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.8'
+      
+      - name: Install pipenv
+        run: |
+          python -m pip install --upgrade pip
+          pip install pipenv
+      
+      - name: Create icon files
+        run: |
+          mkdir -p packaging/windows
+          # Create/copy icons and installer images
+          if (Test-Path "app/static/img/logo.png") {
+            Copy-Item "app/static/img/logo.png" -Destination "packaging/windows/logo.png"
+            # Create .ico file (requires ImageMagick on Windows, using placeholder for now)
+            echo "Creating placeholder icon"
+            New-Item -ItemType File -Path "packaging/windows/pg_lineage.ico" -Force
+          } else {
+            New-Item -ItemType File -Path "packaging/windows/pg_lineage.ico" -Force
+          }
+          # Create installer images
+          New-Item -ItemType File -Path "packaging/windows/installer-sidebar.bmp" -Force
+          New-Item -ItemType File -Path "packaging/windows/installer-header.bmp" -Force
+        shell: pwsh
+      
+      - name: Install NSIS
+        run: |
+          choco install nsis -y
+        shell: pwsh
+      
+      - name: Install dependencies
+        run: |
+          pipenv install
+          pipenv install --dev
+      
+      - name: Build Windows package
+        run: |
+          pipenv run pyinstaller pyinstaller.spec
+          # Create a simple ZIP archive
+          Compress-Archive -Path "dist/pg_lineage/*" -DestinationPath "dist/PostgreSQL_Data_Lineage_windows.zip"
+          # Build NSIS installer
+          & 'C:\Program Files (x86)\NSIS\makensis.exe' packaging/windows/installer.nsi
+          Move-Item pg_lineage_setup.exe dist/pg_lineage_setup.exe
+        shell: pwsh
+      
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: windows-package
+          path: |
+            dist/PostgreSQL*.zip
+            dist/pg_lineage_setup.exe
+          if-no-files-found: error
+  
+  create-release:
+    needs: [build-macos, build-linux, build-windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        
+      - name: List downloaded artifacts
+        run: find . -type f
+        
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            macos-app/PostgreSQL*.dmg
+            linux-package/PostgreSQL*.tar.gz
+            windows-package/PostgreSQL*.zip
+            windows-package/pg_lineage_setup.exe
+          draft: false
+          prerelease: false
+          generate_release_notes: true

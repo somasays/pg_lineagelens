@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=PostgreSQL Data Lineage
+Comment=PostgreSQL Data Lineage Analysis Tool
+Exec=/usr/local/bin/pg_lineage
+Icon=/usr/local/share/icons/hicolor/128x128/apps/pg_lineage.png
+Terminal=false
+Type=Application
+Categories=Development;Database;
