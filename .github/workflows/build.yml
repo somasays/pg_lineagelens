@@ -40,7 +40,8 @@ jobs:
       - name: Build macOS app
         run: |
           # Modify PyInstaller spec file to not fail on missing icon
-          sed -i.bak 's/icon=.*icns/icon=None/g' pyinstaller.spec || true
+          sed -i.bak "s/icon=icon_file/icon=None/g" pyinstaller.spec
+          sed -i.bak "s/icon='packaging\/macos\/pg_lineage.icns'/icon=None/g" pyinstaller.spec
           pipenv run pyinstaller pyinstaller.spec
           bash packaging/macos/create_app.sh
       
