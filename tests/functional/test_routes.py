@@ -4,13 +4,14 @@ Functional tests for the Flask application routes.
 import os
 import pytest
 import json
+import tempfile
+import pandas as pd
 from unittest.mock import patch, MagicMock
 from flask import session
 
 from app import app
 
 
-@pytest.mark.skip(reason="UI has changed significantly and tests need to be updated to match the new UI")
 class TestRoutes:
     """Test cases for the application routes."""
 
@@ -22,17 +23,20 @@ class TestRoutes:
         assert b'<title>pg_lineagelens' in response.data
         assert b'PostgreSQL Data Lineage' in response.data
 
-    def test_connect_route_get(self, client):
-        """Test the connect route (GET method)."""
-        response = client.get('/connect')
+    def test_connect_post(self, client):
+        """Test the connect endpoint with POST method."""
+        # The connect route now uses AJAX, so we send a POST and expect JSON
+        response = client.post('/connect', data={
+            'host': 'localhost',
+            'database': 'testdb',
+            'user': 'postgres',
+            'password': 'password',
+            'port': '5432'
+        }, content_type='application/x-www-form-urlencoded')
+        
         assert response.status_code == 200
-        assert b'<title>PostgreSQL Data Lineage</title>' in response.data
-        assert b'<form' in response.data
-        assert b'name="host"' in response.data
-        assert b'name="database"' in response.data
-        assert b'name="user"' in response.data
-        assert b'name="password"' in response.data
-        assert b'name="port"' in response.data
+        # Check response content type
+        assert response.content_type == 'application/json'
 
     @patch('app.routes.PostgresQueryLineage')
     def test_connect_route_post_success(self, mock_lineage_class, client):
@@ -40,28 +44,27 @@ class TestRoutes:
         # Configure mock
         mock_lineage = MagicMock()
         mock_lineage_class.return_value = mock_lineage
-        mock_lineage.connect.return_value = True
-        mock_lineage.check_pg_stat_statements.return_value = True
+        mock_lineage.connect.return_value = (True, "Successfully connected to database")
         
-        # Submit connection form
+        # Submit connection form via AJAX
         response = client.post('/connect', data={
             'host': 'localhost',
             'database': 'testdb',
             'user': 'postgres',
             'password': 'password',
             'port': '5432'
-        }, follow_redirects=True)
+        })
         
-        # Check response
+        # Check JSON response
         assert response.status_code == 200
-        assert b'Successfully connected to database' in response.data or b'Database Analysis' in response.data
+        json_data = json.loads(response.data)
+        assert json_data['success'] is True
         
         # Verify session variables
         with client.session_transaction() as sess:
-            assert sess.get('connected') == True
-            assert sess.get('database') == 'testdb'
-            assert sess.get('host') == 'localhost'
-            assert sess.get('has_pg_stat_statements') == True
+            assert 'connection_params' in sess
+            assert sess['connection_params']['database'] == 'testdb'
+            assert sess['connection_params']['host'] == 'localhost'
 
     @patch('app.routes.PostgresQueryLineage')
     def test_connect_route_post_failure(self, mock_lineage_class, client):
@@ -69,247 +72,255 @@ class TestRoutes:
         # Configure mock
         mock_lineage = MagicMock()
         mock_lineage_class.return_value = mock_lineage
-        mock_lineage.connect.return_value = False
+        mock_lineage.connect.return_value = (False, "Error connecting to database")
         
-        # Submit connection form
+        # Submit connection form via AJAX
         response = client.post('/connect', data={
             'host': 'localhost',
             'database': 'non_existent_db',
             'user': 'postgres',
             'password': 'wrong_password',
             'port': '5432'
-        }, follow_redirects=True)
+        })
         
-        # Check response
+        # Check JSON response
         assert response.status_code == 200
-        assert b'Failed to connect to database' in response.data
-        
-        # Verify session variables
-        with client.session_transaction() as sess:
-            assert not sess.get('connected', False)
+        json_data = json.loads(response.data)
+        assert json_data['success'] is False
+        assert "Error connecting to database" in json_data['message']
 
     @patch('app.routes.PostgresQueryLineage')
-    def test_connect_missing_pg_stat_statements(self, mock_lineage_class, client):
-        """Test connection with missing pg_stat_statements extension."""
+    def test_analyze_post(self, mock_lineage_class, client):
+        """Test the analyze endpoint with POST method."""
         # Configure mock
         mock_lineage = MagicMock()
         mock_lineage_class.return_value = mock_lineage
-        mock_lineage.connect.return_value = True
-        mock_lineage.check_pg_stat_statements.return_value = False
-        
-        # Submit connection form
-        response = client.post('/connect', data={
-            'host': 'localhost',
-            'database': 'testdb',
-            'user': 'postgres',
-            'password': 'password',
-            'port': '5432'
-        }, follow_redirects=True)
-        
-        # Check response
-        assert response.status_code == 200
-        assert b'connected to database' in response.data
-        assert b'pg_stat_statements extension is not enabled' in response.data
-        
-        # Verify session variables
-        with client.session_transaction() as sess:
-            assert sess.get('connected') == True
-            assert sess.get('has_pg_stat_statements') == False
-
-    def test_analyze_route_not_connected(self, client):
-        """Test analyze route when not connected."""
-        response = client.get('/analyze', follow_redirects=True)
-        assert response.status_code == 200
-        assert b'not connected to any database' in response.data
-
-    @patch('app.routes.PostgresQueryLineage')
-    def test_analyze_route_success(self, mock_lineage_class, client):
-        """Test successful analysis."""
-        # Configure mock
-        mock_lineage = MagicMock()
-        mock_lineage_class.return_value = mock_lineage
-        mock_lineage.connect.return_value = True
-        mock_lineage.check_pg_stat_statements.return_value = True
-        mock_lineage.get_expensive_queries.return_value = [
-            {'queryid': 1, 'query': 'SELECT * FROM users', 'calls': 100, 'total_time': 1000.0, 'mean_time': 10.0, 'rows': 1000}
-        ]
-        
-        # Set session variables to simulate connection
-        with client.session_transaction() as sess:
-            sess['connected'] = True
-            sess['database'] = 'testdb'
-            sess['host'] = 'localhost'
-            sess['user'] = 'postgres'
-            sess['password'] = 'password'
-            sess['port'] = '5432'
-            sess['has_pg_stat_statements'] = True
-        
-        # Request analysis
-        response = client.get('/analyze', follow_redirects=True)
-        
-        # Check response
-        assert response.status_code == 200
-        assert b'Analysis complete' in response.data or b'Expensive Queries' in response.data
-        
-        # Verify session variables
-        with client.session_transaction() as sess:
-            assert sess.get('analyzed') == True
-
-    @patch('app.routes.PostgresQueryLineage')
-    def test_expensive_queries_route(self, mock_lineage_class, client, sample_queries):
-        """Test expensive queries display."""
-        # Configure mock
-        mock_lineage = MagicMock()
-        mock_lineage_class.return_value = mock_lineage
-        mock_lineage.connect.return_value = True
-        mock_lineage.get_expensive_queries.return_value = sample_queries
-        
-        # Set session variables
-        with client.session_transaction() as sess:
-            sess['connected'] = True
-            sess['database'] = 'testdb'
-            sess['host'] = 'localhost'
-            sess['user'] = 'postgres'
-            sess['password'] = 'password'
-            sess['port'] = '5432'
-            sess['has_pg_stat_statements'] = True
-            sess['analyzed'] = True
-            sess['expensive_queries'] = sample_queries
-        
-        # Request expensive queries
-        response = client.get('/expensive_queries')
-        
-        # Check response
-        assert response.status_code == 200
-        assert b'Expensive Queries' in response.data
-        for query in sample_queries:
-            assert query['query'].encode() in response.data or str(query['calls']).encode() in response.data
-
-    @patch('app.routes.PostgresQueryLineage')
-    def test_lineage_route(self, mock_lineage_class, client):
-        """Test lineage visualization."""
-        # Configure mock
-        mock_lineage = MagicMock()
-        mock_lineage_class.return_value = mock_lineage
-        mock_lineage.connect.return_value = True
-        
-        # Create mock graph data
-        mock_dependencies = {
-            "users": {
-                "sources": ["orders"],
-                "targets": []
-            },
-            "orders": {
-                "sources": [],
-                "targets": ["users"]
+        mock_lineage.run_complete_analysis.return_value = {
+            'expensive_queries': pd.DataFrame([{
+                'queryid': 1, 
+                'query': 'SELECT * FROM users',
+                'calls': 100,
+                'total_time': 1000.0
+            }]),
+            'table_stats': pd.DataFrame(),
+            'files': {
+                'lineage_image': '/tmp/lineage.svg',
+                'expensive_queries': '/tmp/queries.csv'
             }
         }
         
-        mock_lineage.get_table_dependencies.return_value = mock_dependencies
-        mock_lineage.build_lineage_graph.return_value = (MagicMock(), MagicMock())
-        mock_lineage.visualize_lineage.return_value = "graph.svg"
-        
-        # Set session variables
+        # Set up session
         with client.session_transaction() as sess:
-            sess['connected'] = True
-            sess['database'] = 'testdb'
-            sess['host'] = 'localhost'
-            sess['user'] = 'postgres'
-            sess['password'] = 'password'
-            sess['port'] = '5432'
-            sess['analyzed'] = True
-            sess['expensive_queries'] = [{'queryid': 1, 'query': 'SELECT * FROM users'}]
+            sess['connection_params'] = {
+                'host': 'localhost',
+                'database': 'testdb',
+                'user': 'postgres',
+                'password': 'password',
+                'port': 5432
+            }
         
-        # Request lineage visualization
-        response = client.get('/lineage')
+        # Submit analysis request
+        response = client.post('/analyze', data={
+            'limit': '20',
+            'min_calls': '5'
+        })
         
-        # Check response
+        # Check JSON response
         assert response.status_code == 200
-        assert b'Table Lineage' in response.data
-        assert b'<svg' in response.data or b'graph.svg' in response.data
+        json_data = json.loads(response.data)
+        assert json_data['success'] is True
+        assert 'queries_count' in json_data
 
-    @patch('app.routes.PostgresQueryLineage')
-    def test_table_details_route(self, mock_lineage_class, client):
-        """Test table details display."""
-        # Configure mock
-        mock_lineage = MagicMock()
-        mock_lineage_class.return_value = mock_lineage
-        mock_lineage.connect.return_value = True
+    def test_analyze_post_not_connected(self, client):
+        """Test analyze endpoint when not connected."""
+        # Post to analyze without connection params in session
+        response = client.post('/analyze', data={
+            'limit': '20',
+            'min_calls': '5'
+        })
         
-        # Mock table columns
-        mock_columns = [
-            {"name": "id", "type": "integer"},
-            {"name": "name", "type": "character varying"},
-            {"name": "email", "type": "character varying"}
-        ]
-        mock_lineage.get_table_columns.return_value = mock_columns
-        
-        # Set session variables
-        with client.session_transaction() as sess:
-            sess['connected'] = True
-            sess['database'] = 'testdb'
-            sess['host'] = 'localhost'
-            sess['user'] = 'postgres'
-            sess['password'] = 'password'
-            sess['port'] = '5432'
-            sess['analyzed'] = True
-        
-        # Request table details
-        response = client.get('/table_details/users')
-        
-        # Check response
+        # Check JSON response
         assert response.status_code == 200
-        assert b'Table Details: users' in response.data
-        assert b'id' in response.data
-        assert b'integer' in response.data
-        assert b'name' in response.data
-        assert b'character varying' in response.data
+        json_data = json.loads(response.data)
+        assert json_data['success'] is False
+        assert 'Not connected to a database' in json_data['message']
+
+    def test_expensive_queries_page(self, client):
+        """Test expensive queries page."""
+        # Set up session with analysis results
+        with client.session_transaction() as sess:
+            sess['has_results'] = True
+            sess['analysis_files'] = {
+                'expensive_queries': None  # This will cause a redirect with a flash message
+            }
+        
+        response = client.get('/expensive_queries', follow_redirects=True)
+        assert response.status_code == 200
+
+    def test_lineage_page(self, client):
+        """Test lineage page."""
+        # Create a temp file to simulate the lineage image
+        with tempfile.NamedTemporaryFile(suffix='.svg') as tmp:
+            tmp_path = tmp.name
+            # Write some SVG content to the temp file
+            tmp.write(b'<svg></svg>')
+            tmp.flush()
+            
+            # Set up session with analysis results
+            with client.session_transaction() as sess:
+                sess['has_results'] = True
+                sess['analysis_files'] = {
+                    'lineage_image': tmp_path,
+                    'lineage_graphml': tmp_path
+                }
+            
+            response = client.get('/lineage')
+            assert response.status_code == 200
+            assert b'Data Lineage' in response.data
 
     def test_reset_route(self, client):
         """Test session reset."""
         # Set session variables
         with client.session_transaction() as sess:
-            sess['connected'] = True
-            sess['database'] = 'testdb'
-            sess['analyzed'] = True
+            sess['has_results'] = True
+            sess['analysis_files'] = {'some_file': 'path'}
         
         # Request session reset
         response = client.get('/reset', follow_redirects=True)
         
         # Check response
         assert response.status_code == 200
-        assert b'Session reset' in response.data
         
         # Verify session variables
         with client.session_transaction() as sess:
-            assert not sess.get('connected', False)
-            assert not sess.get('analyzed', False)
+            assert 'has_results' not in sess
+            assert 'analysis_files' not in sess
 
-    @patch('app.routes.PostgresQueryLineage')
-    def test_disconnect_route(self, mock_lineage_class, client):
+    def test_disconnect_route(self, client):
         """Test database disconnect."""
-        # Configure mock
-        mock_lineage = MagicMock()
-        mock_lineage_class.return_value = mock_lineage
-        
         # Set session variables
         with client.session_transaction() as sess:
-            sess['connected'] = True
-            sess['database'] = 'testdb'
-            sess['host'] = 'localhost'
-            sess['user'] = 'postgres'
-            sess['password'] = 'password'
-            sess['port'] = '5432'
-            sess['analyzed'] = True
+            sess['connection_params'] = {
+                'host': 'localhost',
+                'database': 'testdb',
+                'user': 'postgres',
+                'password': 'password',
+                'port': 5432
+            }
+            sess['has_results'] = True
         
         # Request disconnect
         response = client.get('/disconnect', follow_redirects=True)
         
         # Check response
         assert response.status_code == 200
-        assert b'Disconnected from database' in response.data
         
-        # Verify session variables and disconnect call
-        mock_lineage.disconnect.assert_called_once()
+        # Verify session variables
         with client.session_transaction() as sess:
-            assert not sess.get('connected', False)
+            assert 'connection_params' not in sess
+            assert 'has_results' not in sess
+    
+    @patch('app.routes.os.path.exists')
+    @patch('app.routes.send_file')
+    def test_download_route(self, mock_send_file, mock_exists, client):
+        """Test download endpoint."""
+        # Mock file existence check
+        mock_exists.return_value = True
+        
+        # Mock send_file to return a custom response
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_send_file.return_value = mock_response
+        
+        # Set up session with analysis results
+        with client.session_transaction() as sess:
+            sess['has_results'] = True
+            sess['analysis_files'] = {
+                'expensive_queries': '/tmp/fake_path.csv'
+            }
+        
+        # Try to download a file
+        response = client.get('/download/expensive_queries')
+        
+        # Check that send_file was called
+        mock_send_file.assert_called_once_with('/tmp/fake_path.csv', as_attachment=True)
+        
+        # Check response
+        assert response.status_code == 200
+
+    @patch('app.routes.pd.read_csv')
+    def test_table_details_page(self, mock_read_csv, client):
+        """Test table details page."""
+        # Mock the pandas read_csv function to return test data
+        mock_df = pd.DataFrame([
+            {'table_name': 'users', 'schema': 'public', 'row_count': 1000}
+        ])
+        mock_read_csv.return_value = mock_df
+        
+        # Set up session with analysis results
+        with client.session_transaction() as sess:
+            sess['has_results'] = True
+            sess['analysis_files'] = {
+                'table_stats': '/tmp/fake_path.csv'  # Path doesn't matter as we're mocking read_csv
+            }
+        
+        # Request table details for a table that exists in our mock data
+        response = client.get('/table_details/users', follow_redirects=True)
+        assert response.status_code == 200
+            
+    @patch('app.routes.os.path.exists')
+    @patch('app.routes.pd.read_csv')
+    def test_table_stats_page(self, mock_read_csv, mock_exists, client):
+        """Test table stats page."""
+        # Mock file existence check
+        mock_exists.return_value = True
+        
+        # Mock the pandas read_csv function to return test data with all required columns
+        # Based on the template, we need these specific columns
+        mock_df = pd.DataFrame([
+            {
+                'table_name': 'users', 
+                'schema': 'public', 
+                'row_count': 1000,
+                'total_queries': 150,
+                'read_queries': 100,
+                'write_queries': 50,
+                'total_time': 1000.0,
+                'total_read_time': 800.0,
+                'total_write_time': 200.0
+            }
+        ])
+        mock_read_csv.return_value = mock_df
+        
+        # Set up session with analysis results
+        with client.session_transaction() as sess:
+            sess['has_results'] = True
+            sess['analysis_files'] = {
+                'table_stats': '/tmp/fake_path.csv'  # Path doesn't matter as we're mocking read_csv
+            }
+        
+        response = client.get('/table_stats', follow_redirects=True)
+        assert response.status_code == 200
+        # Check for some expected content
+        assert b'Table Statistics' in response.data
+        assert b'users' in response.data  # Should show our mock table name
+    
+    @patch('app.routes.pd.read_csv')
+    def test_query_details_page(self, mock_read_csv, client):
+        """Test query details page."""
+        # Mock the pandas read_csv function to return test data
+        mock_df = pd.DataFrame([
+            {'queryid': 1, 'query': 'SELECT * FROM users', 'calls': 100, 'total_time': 1000.0}
+        ])
+        mock_read_csv.return_value = mock_df
+        
+        # Set up session with analysis results
+        with client.session_transaction() as sess:
+            sess['has_results'] = True
+            sess['analysis_files'] = {
+                'expensive_queries': '/tmp/fake_path.csv'  # Path doesn't matter as we're mocking read_csv
+            }
+        
+        # Test with a valid query index that exists in our mock data
+        response = client.get('/query_details/0', follow_redirects=True)
+        assert response.status_code == 200
