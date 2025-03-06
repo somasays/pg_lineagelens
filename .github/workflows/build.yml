@@ -1,7 +1,8 @@
-name: Build PostgreSQL Data Lineage
+name: Build pg_lineagelens
 
 on:
   push:
+    # Only run on version tags and main branch
     branches: [main]
     tags:
       - 'v*'
@@ -19,6 +20,19 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.8'
+      
+      - name: Get version
+        id: get_version
+        run: |
+          # If this is a tag, use the tag name without the 'v' prefix
+          if [[ $GITHUB_REF == refs/tags/v* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+          else
+            # Otherwise use the version from _version.py with SNAPSHOT suffix
+            VERSION=$(python -c "import sys; sys.path.append('app'); from _version import __version__; print(f'{__version__}-SNAPSHOT')")
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
       
       - name: Install pipenv
         run: |
@@ -42,14 +56,20 @@ jobs:
           # Modify PyInstaller spec file to not fail on missing icon
           sed -i.bak "s/icon=icon_file/icon=None/g" pyinstaller.spec
           sed -i.bak "s/icon='packaging\/macos\/pg_lineage.icns'/icon=None/g" pyinstaller.spec
+          # Update app name in spec file
+          sed -i.bak "s/name='PostgreSQL Data Lineage.app'/name='pg_lineagelens.app'/g" pyinstaller.spec
           pipenv run pyinstaller pyinstaller.spec
           bash packaging/macos/create_app.sh
+          # Rename the dmg file to match naming convention
+          if [ -f dist/PostgreSQL*.dmg ]; then
+            mv dist/PostgreSQL*.dmg dist/pg_lineagelens-${{ steps.get_version.outputs.version }}-macos.dmg
+          fi
       
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
         with:
           name: macos-app
-          path: dist/PostgreSQL*.dmg
+          path: dist/pg_lineagelens-*.dmg
           if-no-files-found: error
   
   build-linux:
@@ -61,6 +81,19 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.8'
+          
+      - name: Get version
+        id: get_version
+        run: |
+          # If this is a tag, use the tag name without the 'v' prefix
+          if [[ $GITHUB_REF == refs/tags/v* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+          else
+            # Otherwise use the version from _version.py with SNAPSHOT suffix
+            VERSION=$(python -c "import sys; sys.path.append('app'); from _version import __version__; print(f'{__version__}-SNAPSHOT')")
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
       
       - name: Install pipenv
         run: |
@@ -82,69 +115,92 @@ jobs:
       
       - name: Build Linux package
         run: |
+          # Update app name in spec file
+          sed -i.bak "s/name='PostgreSQL Data Lineage.app'/name='pg_lineagelens.app'/g" pyinstaller.spec || true
           pipenv run pyinstaller pyinstaller.spec
           chmod +x packaging/linux/create_package.sh
           packaging/linux/create_package.sh
+          # Rename the tar.gz file to match naming convention
+          if [ -f dist/PostgreSQL*.tar.gz ]; then
+            mv dist/PostgreSQL*.tar.gz dist/pg_lineagelens-${{ steps.get_version.outputs.version }}-linux.tar.gz
+          fi
       
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
         with:
           name: linux-package
-          path: dist/PostgreSQL*.tar.gz
+          path: dist/pg_lineagelens-*.tar.gz
           if-no-files-found: error
   
-  build-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.8'
-      
-      - name: Install pipenv
-        run: |
-          python -m pip install --upgrade pip
-          pip install pipenv
-      
-      - name: Create icon files
-        run: |
-          New-Item -Path packaging/windows -ItemType Directory -Force
-          New-Item -ItemType File -Path "packaging/windows/pg_lineage.ico" -Force
-          New-Item -ItemType File -Path "packaging/windows/installer-sidebar.bmp" -Force
-          New-Item -ItemType File -Path "packaging/windows/installer-header.bmp" -Force
-        shell: pwsh
-      
-      - name: Install NSIS
-        run: |
-          choco install nsis -y
-        shell: pwsh
-      
-      - name: Install dependencies
-        run: |
-          pipenv install --pre
-          pipenv install --dev --pre
-      
-      - name: Build Windows package
-        run: |
-          pipenv run pyinstaller pyinstaller.spec
-          Compress-Archive -Path "dist/pg_lineage/*" -DestinationPath "dist/PostgreSQL_Data_Lineage_windows.zip"
-          & 'C:\Program Files (x86)\NSIS\makensis.exe' packaging/windows/installer.nsi
-          Move-Item pg_lineage_setup.exe dist/pg_lineage_setup.exe
-        shell: pwsh
-      
-      - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-package
-          path: |
-            dist/PostgreSQL*.zip
-            dist/pg_lineage_setup.exe
-          if-no-files-found: error
+# Windows build disabled for now
+#  build-windows:
+#    runs-on: windows-latest
+#    steps:
+#      - uses: actions/checkout@v4
+#      
+#      - name: Set up Python
+#        uses: actions/setup-python@v5
+#        with:
+#          python-version: '3.8'
+#      
+#      - name: Get version
+#        id: get_version
+#        shell: bash
+#        run: |
+#          # If this is a tag, use the tag name without the 'v' prefix
+#          if [[ $GITHUB_REF == refs/tags/v* ]]; then
+#            VERSION=${GITHUB_REF#refs/tags/v}
+#          else
+#            # Otherwise use the version from _version.py with SNAPSHOT suffix
+#            VERSION=$(python -c "import sys; sys.path.append('app'); from _version import __version__; print(f'{__version__}-SNAPSHOT')")
+#          fi
+#          echo "version=$VERSION" >> $GITHUB_OUTPUT
+#          echo "Building version: $VERSION"
+#      
+#      - name: Install pipenv
+#        run: |
+#          python -m pip install --upgrade pip
+#          pip install pipenv
+#      
+#      - name: Create icon files
+#        run: |
+#          New-Item -Path packaging/windows -ItemType Directory -Force
+#          New-Item -ItemType File -Path "packaging/windows/pg_lineage.ico" -Force
+#          New-Item -ItemType File -Path "packaging/windows/installer-sidebar.bmp" -Force
+#          New-Item -ItemType File -Path "packaging/windows/installer-header.bmp" -Force
+#        shell: pwsh
+#      
+#      - name: Install NSIS
+#        run: |
+#          choco install nsis -y
+#        shell: pwsh
+#      
+#      - name: Install dependencies
+#        run: |
+#          pipenv install --pre
+#          pipenv install --dev --pre
+#      
+#      - name: Build Windows package
+#        run: |
+#          # Update app name in spec file
+#          sed -i.bak "s/name='PostgreSQL Data Lineage.app'/name='pg_lineagelens.app'/g" pyinstaller.spec
+#          pipenv run pyinstaller pyinstaller.spec
+#          Compress-Archive -Path "dist/pg_lineage/*" -DestinationPath "dist/pg_lineagelens-${{ steps.get_version.outputs.version }}-windows.zip"
+#          & 'C:\Program Files (x86)\NSIS\makensis.exe' packaging/windows/installer.nsi
+#          Move-Item pg_lineage_setup.exe "dist/pg_lineagelens-${{ steps.get_version.outputs.version }}-setup.exe"
+#        shell: pwsh
+#      
+#      - name: Upload Windows artifacts
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: windows-package
+#          path: |
+#            dist/pg_lineagelens-*.zip
+#            dist/pg_lineagelens-*-setup.exe
+#          if-no-files-found: error
   
   create-release:
-    needs: [build-macos, build-linux, build-windows]
+    needs: [build-macos, build-linux]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
@@ -154,15 +210,34 @@ jobs:
       - name: List downloaded artifacts
         run: find . -type f
         
+      - name: Get version
+        id: get_version
+        run: |
+          # Extract version from tag
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Creating release for version: $VERSION"
+        
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v1
         with:
+          name: "pg_lineagelens v${{ steps.get_version.outputs.version }}"
+          body: |
+            # pg_lineagelens v${{ steps.get_version.outputs.version }}
+            
+            ## Binaries
+            - macOS: pg_lineagelens-${{ steps.get_version.outputs.version }}-macos.dmg
+            - Linux: pg_lineagelens-${{ steps.get_version.outputs.version }}-linux.tar.gz
+            
+            ## Installation
+            Download the appropriate binary for your platform and run it.
+            
+            ## Notes
+            See CHANGELOG.md for details on changes in this release.
           files: |
-            macos-app/PostgreSQL*.dmg
-            linux-package/PostgreSQL*.tar.gz
-            windows-package/PostgreSQL*.zip
-            windows-package/pg_lineage_setup.exe
-          draft: false
+            macos-app/pg_lineagelens-*.dmg
+            linux-package/pg_lineagelens-*.tar.gz
+          draft: true
           prerelease: false
           generate_release_notes: true
