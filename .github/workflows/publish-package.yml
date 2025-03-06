@@ -1,21 +1,84 @@
 name: Build and Publish Python Package
 
 on:
-  release:
-    types: [created]
   push:
     tags:
       - 'v*'  # Run workflow on version tags, e.g. v1.0.0
   workflow_dispatch:  # Manual trigger
 
 jobs:
-  deploy:
+  # Check if tests on main branch passed
+  check-main-workflow:
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+      - name: Check main branch workflow status
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            
+            // Get the latest workflow run on main branch
+            const { data: mainWorkflows } = await github.rest.actions.listWorkflowRunsForRepo({
+              owner,
+              repo,
+              branch: 'main',
+              workflow_id: 'test.yml',
+              status: 'completed',
+              per_page: 1
+            });
+            
+            if (mainWorkflows.workflow_runs.length === 0) {
+              core.setFailed('No workflow runs found for main branch');
+              return;
+            }
+            
+            const latestRun = mainWorkflows.workflow_runs[0];
+            console.log(`Latest main branch workflow run: ${latestRun.html_url}`);
+            console.log(`Status: ${latestRun.conclusion}`);
+            
+            if (latestRun.conclusion !== 'success') {
+              core.setFailed(`Main branch workflow is not passing. Status: ${latestRun.conclusion}`);
+              return;
+            }
+            
+            console.log('Main branch workflow is passing. Proceeding with tag build.');
+
+  test:
+    needs: check-main-workflow
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
     
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.8'
+    
+    - name: Install pipenv
+      run: |
+        python -m pip install --upgrade pip
+        pip install pipenv
+    
+    - name: Install dependencies
+      run: |
+        pipenv install --pre
+        pipenv install --dev --pre
+        
+    - name: Run tests
+      run: |
+        pipenv run pytest tests/unit/ tests/functional/
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
       with:
         python-version: '3.10'
     
@@ -31,7 +94,7 @@ jobs:
       run: twine check dist/*
     
     - name: Publish package to PyPI
-      if: github.event_name == 'release' || startsWith(github.ref, 'refs/tags/v')
+      if: startsWith(github.ref, 'refs/tags/v')
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
         user: __token__
