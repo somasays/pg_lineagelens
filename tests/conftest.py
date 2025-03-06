@@ -3,7 +3,14 @@ Global pytest configuration and fixtures.
 """
 import os
 import sys
+import time
+import socket
 import pytest
+try:
+    import docker
+except ImportError:
+    # Mock docker for unit tests if not available
+    docker = None
 from unittest.mock import patch, MagicMock
 from flask import Flask
 
@@ -13,6 +20,72 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from app import routes
 from app.analyzer import PostgresQueryLineage
 
+# Check if we can use docker for integration tests
+DOCKER_AVAILABLE = docker is not None
+
+# Skip decorator for tests that require Docker
+docker_required = pytest.mark.docker(
+    pytest.mark.skipif(
+        not DOCKER_AVAILABLE,
+        reason="Docker not available for integration tests"
+    )
+)
+
+if DOCKER_AVAILABLE:
+    # Docker container fixture for integration tests
+    @pytest.fixture(scope="session")
+    def docker_compose_file(pytestconfig):
+        """Path to the docker-compose.yml file."""
+        return os.path.join(os.path.dirname(os.path.dirname(__file__)), "docker-compose.yml")
+
+    @pytest.fixture(scope="session")
+    def docker_compose_project_name():
+        """Project name for the Docker Compose."""
+        return "pg_lineage_test"
+
+    @pytest.fixture(scope="session")
+    def postgres_service(docker_ip, docker_services):
+        """Ensure that PostgreSQL service is up and responsive."""
+        port = docker_services.port_for("postgres", 5432)
+        server_url = f"postgresql://postgres:postgres@{docker_ip}:{port}/postgres"
+        docker_services.wait_until_responsive(
+            timeout=30.0, pause=0.1, check=lambda: is_postgres_responsive(docker_ip, port)
+        )
+        return server_url
+
+    def is_postgres_responsive(host, port):
+        """Check if PostgreSQL is responsive."""
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(1)
+            sock.connect((host, port))
+            sock.close()
+            return True
+        except socket.error:
+            return False
+
+    @pytest.fixture(scope="session")
+    def postgres_connection_params(docker_ip, docker_services):
+        """PostgreSQL connection parameters for integration tests."""
+        port = docker_services.port_for("postgres", 5432)
+        return {
+            "host": docker_ip,
+            "database": "postgres",
+            "user": "postgres",
+            "password": "postgres",
+            "port": port
+        }
+else:
+    # Provide mock fixtures when Docker is not available
+    @pytest.fixture(scope="session")
+    def postgres_service():
+        """Mock PostgreSQL service when Docker is not available."""
+        pytest.skip("Docker not available for integration tests")
+        
+    @pytest.fixture(scope="session")
+    def postgres_connection_params():
+        """Mock PostgreSQL connection parameters when Docker is not available."""
+        pytest.skip("Docker not available for integration tests")
 
 @pytest.fixture
 def app():
@@ -58,12 +131,12 @@ def mock_lineage_analyzer():
     """Create a mock PostgresQueryLineage instance."""
     with patch('app.analyzer.PostgresQueryLineage', autospec=True) as mock_analyzer_cls:
         mock_analyzer = mock_analyzer_cls.return_value
-        mock_analyzer.connect.return_value = True
+        mock_analyzer.connect.return_value = (True, "Connected successfully")
         mock_analyzer.disconnect.return_value = None
-        mock_analyzer.check_pg_stat_statements.return_value = True
+        mock_analyzer.check_pg_stat_statements.return_value = (True, "pg_stat_statements is available")
         mock_analyzer.get_expensive_queries.return_value = []
         mock_analyzer.get_table_dependencies.return_value = {}
-        mock_analyzer.build_lineage_graph.return_value = (MagicMock(), MagicMock())
+        mock_analyzer.build_lineage_graph.return_value = MagicMock()
         mock_analyzer.visualize_lineage.return_value = "graph.svg"
         yield mock_analyzer
 
