@@ -37,7 +37,7 @@ jobs:
             # Otherwise use the version from _version.py with SNAPSHOT suffix
             VERSION=$(python -c "import sys; sys.path.append('app'); from _version import __version__; print(f'{__version__}-SNAPSHOT')")
           fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Building version: $VERSION"
       
       - name: Install pipenv
@@ -113,7 +113,7 @@ jobs:
             # Otherwise use the version from _version.py with SNAPSHOT suffix
             VERSION=$(python -c "import sys; sys.path.append('app'); from _version import __version__; print(f'{__version__}-SNAPSHOT')")
           fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Building version: $VERSION"
       
       - name: Install pipenv
@@ -263,7 +263,7 @@ jobs:
         run: |
           # Extract version from tag
           VERSION=${GITHUB_REF#refs/tags/v}
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Creating release for version: $VERSION"
           
       - name: Copy artifacts to release directory
@@ -304,7 +304,7 @@ jobs:
           DMG_PATH=$(find . -name "*.dmg" | head -n 1)
           if [ -n "$DMG_PATH" ]; then
             echo "Found DMG: $DMG_PATH"
-            echo "dmg_path=$DMG_PATH" >> $GITHUB_OUTPUT
+            echo "dmg_path=$DMG_PATH" >> "$GITHUB_OUTPUT"
           else
             echo "No DMG file found"
             find . -type f
@@ -316,7 +316,7 @@ jobs:
           TARBALL_PATH=$(find . -name "*.tar.gz" | head -n 1)
           if [ -n "$TARBALL_PATH" ]; then
             echo "Found tarball: $TARBALL_PATH"
-            echo "tarball_path=$TARBALL_PATH" >> $GITHUB_OUTPUT
+            echo "tarball_path=$TARBALL_PATH" >> "$GITHUB_OUTPUT"
           else
             echo "No tarball found"
             find . -type f
