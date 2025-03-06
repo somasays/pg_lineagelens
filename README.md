@@ -45,13 +45,29 @@ A tool for analyzing query performance and building data lineage graphs from Pos
 ### Option 2: Install from PyPI
 
 ```bash
-pip install pg-lineage
+pip install pg_lineagelens
 ```
 
 Then run the application:
 
 ```bash
-pg_lineage
+# Basic usage (starts server and opens browser)
+pg_lineagelens
+
+# Show help and available options
+pg_lineagelens --help
+
+# Run on a specific port
+pg_lineagelens --port 8080
+
+# Run on a specific host (e.g., to allow external connections)
+pg_lineagelens --host 0.0.0.0
+
+# Run without opening browser automatically
+pg_lineagelens --no-browser
+
+# Show version
+pg_lineagelens --version
 ```
 
 ### Option 3: Install from source
@@ -109,8 +125,39 @@ To use this tool, you need to enable the `pg_stat_statements` extension in your 
 ### Requirements
 
 - Python 3.8+
-- PyInstaller 5.0+
+- PyInstaller 5.0+ (for binary builds)
 - pipenv (recommended)
+
+### Python Package
+
+To build the Python package:
+
+```bash
+# Install build tools
+pip install build twine
+
+# Build both wheel and source distribution
+python -m build
+
+# Check the built package
+twine check dist/*
+
+# Upload to TestPyPI (optional, for testing)
+twine upload --repository-url https://test.pypi.org/legacy/ dist/*
+
+# Upload to PyPI (when ready for release)
+twine upload dist/*
+```
+
+Or use the provided script:
+
+```bash
+# Make script executable
+chmod +x build_and_publish.sh
+
+# Run the build script
+./build_and_publish.sh
+```
 
 ### Using Pipenv (Recommended)
 
