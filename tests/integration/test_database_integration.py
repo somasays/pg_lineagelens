@@ -75,10 +75,10 @@ class TestDatabaseIntegration:
     
     def test_pg_stat_statements_detection(self, lineage_analyzer):
         """Test detection of pg_stat_statements extension."""
-        has_extension = lineage_analyzer.check_pg_stat_statements()
+        has_extension, message = lineage_analyzer.check_pg_stat_statements()
         # Note: This test won't fail if the extension is not available,
         # it just verifies the detection works correctly
-        print(f"pg_stat_statements extension available: {has_extension}")
+        print(f"pg_stat_statements extension available: {has_extension} - {message}")
     
     def test_get_table_columns(self, lineage_analyzer):
         """Test retrieving column information from the database."""
@@ -99,7 +99,8 @@ class TestDatabaseIntegration:
     def test_get_expensive_queries(self, lineage_analyzer):
         """Test retrieving expensive queries from pg_stat_statements."""
         # Skip this test if pg_stat_statements is not available
-        if not lineage_analyzer.check_pg_stat_statements():
+        has_extension, _ = lineage_analyzer.check_pg_stat_statements()
+        if not has_extension:
             pytest.skip("pg_stat_statements extension not available")
         
         # Execute a query to have something in pg_stat_statements
@@ -223,7 +224,8 @@ class TestDatabaseIntegration:
     def test_end_to_end_analysis(self, lineage_analyzer):
         """Test the complete analysis workflow."""
         # Skip this test if pg_stat_statements is not available
-        if not lineage_analyzer.check_pg_stat_statements():
+        has_extension, _ = lineage_analyzer.check_pg_stat_statements()
+        if not has_extension:
             pytest.skip("pg_stat_statements extension not available")
         
         # Execute a query to have something in pg_stat_statements

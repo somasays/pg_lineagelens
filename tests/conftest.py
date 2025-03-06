@@ -17,8 +17,10 @@ from app.analyzer import PostgresQueryLineage
 @pytest.fixture
 def app():
     """Create and configure a Flask app for testing."""
-    app = Flask(__name__)
-    app.config.update({
+    from app import app as flask_app
+    
+    # Configure app for testing
+    flask_app.config.update({
         'TESTING': True,
         'SECRET_KEY': 'test_key',
         'DEBUG': True,
@@ -26,10 +28,9 @@ def app():
         'SESSION_PERMANENT': False
     })
     
-    # Register routes
-    app.register_blueprint(routes.bp)
+    # Since routes are already registered in the app module, we don't need to register them again
     
-    yield app
+    yield flask_app
 
 
 @pytest.fixture
