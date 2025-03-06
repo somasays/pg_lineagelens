@@ -34,8 +34,8 @@ jobs:
       
       - name: Install dependencies
         run: |
-          pipenv install
-          pipenv install --dev
+          pipenv install --pre
+          pipenv install --dev --pre
       
       - name: Build macOS app
         run: |
@@ -76,8 +76,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libpq-dev
-          pipenv install
-          pipenv install --dev
+          pipenv install --pre
+          pipenv install --dev --pre
       
       - name: Build Linux package
         run: |
@@ -122,8 +122,8 @@ jobs:
       
       - name: Install dependencies
         run: |
-          pipenv install
-          pipenv install --dev
+          pipenv install --pre
+          pipenv install --dev --pre
       
       - name: Build Windows package
         run: |
