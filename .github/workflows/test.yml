@@ -1,0 +1,56 @@
+name: Run Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:  # Allow manual triggering
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.8'
+    
+    - name: Install pipenv
+      run: |
+        python -m pip install --upgrade pip
+        pip install pipenv
+    
+    - name: Install dependencies
+      run: |
+        pipenv install --pre
+        pipenv install --dev --pre
+        
+    - name: Run unit tests
+      run: |
+        pipenv run pytest tests/unit/
+
+    - name: Run functional tests
+      run: |
+        pipenv run pytest tests/functional/
+        
+    # Skip integration tests in CI since they require a PostgreSQL database
+    # Integration tests will run locally during development
+
+    - name: Generate coverage report
+      if: success()
+      run: |
+        pipenv run pytest --cov=app --cov-report=xml tests/unit/ tests/functional/
+        
+    - name: Upload coverage to Codecov
+      if: success()
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage.xml
+        fail_ci_if_error: false

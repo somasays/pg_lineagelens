@@ -36,9 +36,16 @@ Pipfile.lock
 # Testing
 .pytest_cache/
 .coverage
+.coverage.*
 htmlcov/
 .tox/
 .nox/
+coverage.xml
+*.cover
+.hypothesis/
+nosetests.xml
+test-output/
+flask_session/
 
 # Database
 *.sqlite3
