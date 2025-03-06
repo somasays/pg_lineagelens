@@ -4,7 +4,7 @@
 echo "Creating Linux package..."
 
 # Set variables
-APP_NAME="PostgreSQL Data Lineage"
+APP_NAME="pg_lineagelens"
 DIST_DIR="dist/pg_lineage"
 PACKAGE_DIR="dist/linux_package"
 DESKTOP_FILE="packaging/linux/pg_lineage.desktop"
@@ -24,7 +24,7 @@ cp "$ICON_FILE" "$PACKAGE_DIR/usr/local/share/icons/hicolor/128x128/apps/"
 # Create .desktop file
 cat > "$DESKTOP_FILE" << EOF
 [Desktop Entry]
-Name=PostgreSQL Data Lineage
+Name=pg_lineagelens
 Comment=PostgreSQL Data Lineage Analysis Tool
 Exec=/usr/local/bin/pg_lineage
 Icon=/usr/local/share/icons/hicolor/128x128/apps/pg_lineage.png

@@ -60,17 +60,32 @@ jobs:
           sed -i.bak "s/name='PostgreSQL Data Lineage.app'/name='pg_lineagelens.app'/g" pyinstaller.spec
           pipenv run pyinstaller pyinstaller.spec
           bash packaging/macos/create_app.sh
-          # Rename the dmg file to match naming convention
-          if [ -f dist/PostgreSQL*.dmg ]; then
-            mv dist/PostgreSQL*.dmg dist/pg_lineagelens-${{ steps.get_version.outputs.version }}-macos.dmg
+          # List files in dist directory
+          echo "Files in dist directory before renaming:"
+          ls -la dist/
+          # Rename the dmg file to match naming convention (handle glob expansion)
+          FOUND_DMG=$(find dist -name "PostgreSQL*.dmg" -o -name "*.dmg" | head -n 1)
+          if [ -n "$FOUND_DMG" ]; then
+            echo "Found DMG file: $FOUND_DMG"
+            mv "$FOUND_DMG" dist/pg_lineagelens-${{ steps.get_version.outputs.version }}-macos.dmg
+            echo "Renamed to: dist/pg_lineagelens-${{ steps.get_version.outputs.version }}-macos.dmg"
+          else
+            echo "No DMG file found in dist directory"
+            ls -R dist/
           fi
+          # Verify final result
+          echo "Final files in dist directory:"
+          ls -la dist/
       
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
         with:
           name: macos-app
-          path: dist/pg_lineagelens-*.dmg
+          path: |
+            dist/pg_lineagelens-*.dmg
+            dist/*.dmg
           if-no-files-found: error
+          retention-days: 7
   
   build-linux:
     runs-on: ubuntu-latest
@@ -120,17 +135,32 @@ jobs:
           pipenv run pyinstaller pyinstaller.spec
           chmod +x packaging/linux/create_package.sh
           packaging/linux/create_package.sh
-          # Rename the tar.gz file to match naming convention
-          if [ -f dist/PostgreSQL*.tar.gz ]; then
-            mv dist/PostgreSQL*.tar.gz dist/pg_lineagelens-${{ steps.get_version.outputs.version }}-linux.tar.gz
+          # List files in dist directory
+          echo "Files in dist directory before renaming:"
+          ls -la dist/
+          # Rename the tar.gz file to match naming convention (handle glob expansion)
+          FOUND_TARGZ=$(find dist -name "PostgreSQL*.tar.gz" -o -name "*.tar.gz" | head -n 1)
+          if [ -n "$FOUND_TARGZ" ]; then
+            echo "Found TAR.GZ file: $FOUND_TARGZ"
+            mv "$FOUND_TARGZ" dist/pg_lineagelens-${{ steps.get_version.outputs.version }}-linux.tar.gz
+            echo "Renamed to: dist/pg_lineagelens-${{ steps.get_version.outputs.version }}-linux.tar.gz"
+          else
+            echo "No TAR.GZ file found in dist directory"
+            ls -R dist/
           fi
+          # Verify final result
+          echo "Final files in dist directory:"
+          ls -la dist/
       
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
         with:
           name: linux-package
-          path: dist/pg_lineagelens-*.tar.gz
+          path: |
+            dist/pg_lineagelens-*.tar.gz
+            dist/*.tar.gz
           if-no-files-found: error
+          retention-days: 7
   
 # Windows build disabled for now
 #  build-windows:
@@ -204,11 +234,23 @@ jobs:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
+      - uses: actions/checkout@v4
+      
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         
       - name: List downloaded artifacts
-        run: find . -type f
+        run: |
+          echo "Downloaded artifacts:"
+          find . -type f -name "*.dmg" -o -name "*.tar.gz"
+          
+      - name: Debug artifact paths
+        run: |
+          # Make directory structure easier to see
+          ls -la macos-app/ || echo "No macos-app directory"
+          ls -la linux-package/ || echo "No linux-package directory"
+          # Check for artifacts anywhere
+          find . -type f -name "*.dmg" -o -name "*.tar.gz"
         
       - name: Get version
         id: get_version
@@ -217,6 +259,15 @@ jobs:
           VERSION=${GITHUB_REF#refs/tags/v}
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Creating release for version: $VERSION"
+          
+      - name: Copy artifacts to release directory
+        run: |
+          mkdir -p release_files
+          # Try to find and copy artifacts regardless of directory structure
+          find . -type f -name "*.dmg" -exec cp {} release_files/ \;
+          find . -type f -name "*.tar.gz" -exec cp {} release_files/ \;
+          echo "Files ready for release:"
+          ls -la release_files/
         
       - name: Create Release
         id: create_release
@@ -236,8 +287,12 @@ jobs:
             ## Notes
             See CHANGELOG.md for details on changes in this release.
           files: |
+            release_files/*
             macos-app/pg_lineagelens-*.dmg
             linux-package/pg_lineagelens-*.tar.gz
+            **/pg_lineagelens-*.dmg
+            **/pg_lineagelens-*.tar.gz
           draft: true
           prerelease: false
           generate_release_notes: true
+          fail_on_unmatched_files: false

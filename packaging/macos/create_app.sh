@@ -4,7 +4,7 @@
 echo "Creating macOS app bundle..."
 
 # Set variables
-APP_NAME="PostgreSQL Data Lineage"
+APP_NAME="pg_lineagelens"
 APP_DIR="dist/$APP_NAME.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
@@ -28,17 +28,17 @@ cat > "$CONTENTS_DIR/Info.plist" << EOF
     <key>CFBundleDevelopmentRegion</key>
     <string>English</string>
     <key>CFBundleDisplayName</key>
-    <string>PostgreSQL Data Lineage</string>
+    <string>pg_lineagelens</string>
     <key>CFBundleExecutable</key>
     <string>pg_lineage</string>
     <key>CFBundleIconFile</key>
     <string>pg_lineage.icns</string>
     <key>CFBundleIdentifier</key>
-    <string>com.pglineage</string>
+    <string>com.pglineagelens</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>PostgreSQL Data Lineage</string>
+    <string>pg_lineagelens</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
